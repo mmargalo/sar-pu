@@ -33,7 +33,7 @@ def setup_loader(image_path, dataset_path, class_count, batch_size=64, train=Fal
                                 batch_size=batch_size,
                                 pin_memory=True,
                                 shuffle=train,
-                                drop_last=False)
+                                drop_last=train)
     else:
         g = torch.Generator()
         g.manual_seed(seed)
@@ -73,8 +73,8 @@ class ColpoDataset(Dataset):
                 imagepath = items[0].strip()
                 imagelabel = items[1:]
                 imagelabel = [int(i) for i in imagelabel]
-                if class_count == 1:
-                    imagelabel = 1 if 1 in [imagelabel[pos] for pos in pos_class] else 0
+                #if class_count == 1:
+                #    imagelabel = 1 if 1 in [imagelabel[pos] for pos in pos_class] else 0
 
                 self.listimgpaths.append(imagepath)
                 self.listimglabels.append(imagelabel)
@@ -90,20 +90,6 @@ class ColpoDataset(Dataset):
         unlabeled = len(self.listimglabels) - labeled
         return torch.tensor(unlabeled/labeled)
 
-    def expand2square(self, pil_img, background_color):
-        # for square images while maitaining the ratio
-        width, height = pil_img.size
-        if width == height:
-            return pil_img
-        elif width > height:
-            result = Image.new(pil_img.mode, (width, width), background_color)
-            result.paste(pil_img, (0, (width - height) // 2))
-            return result
-        else:
-            result = Image.new(pil_img.mode, (height, height), background_color)
-            result.paste(pil_img, ((height - width) // 2, 0))
-            return result
-
     def __getitem__(self, idx):
         """
             :return: image index, transformed image, labels, image filename
@@ -111,7 +97,7 @@ class ColpoDataset(Dataset):
         image_fn = join(self.image_path, self.listimgpaths[idx])
         image = Image.open(image_fn)
         image = self.augmenter(image, self.train)    
-        return idx, image, torch.FloatTensor(self.listimglabels[idx]), image_fn
+        return image, torch.FloatTensor(self.listimglabels[idx])
 
     def augmenter(self, image, train=False):
         try:
