@@ -1,7 +1,6 @@
 from email.policy import strict
 from os.path import join
 from tensorboardX import SummaryWriter
-import dill as pickle
 import torch
 from colpo_score import *
 from colpo_sar_pu_em import train_val

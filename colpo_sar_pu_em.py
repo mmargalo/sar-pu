@@ -25,12 +25,12 @@ def train_val(results_folder, outer_epochs, inner_epochs,
     best_ll = 999.
     for epoch in range(outer_epochs):
         print("EPOCH: " + str(epoch))
-        backbone_loop(epoch, train_loader, train_writer, 
+        backbone_loop(epoch, train_loader, train_writer, results_folder,
                     backbone, c_model, p_model,
                     criterion, c_criterion, p_criterion,
                     optim, c_optim, p_optim, 
                     inner_epochs=inner_epochs)
-        ll = backbone_loop(epoch, val_loader, val_writer, 
+        ll = backbone_loop(epoch, val_loader, val_writer, results_folder,
                     backbone, c_model, p_model, 
                     criterion, c_criterion, p_criterion,
                     scheduler=scheduler, c_scheduler=c_scheduler, p_scheduler=p_scheduler)
@@ -43,22 +43,25 @@ def train_val(results_folder, outer_epochs, inner_epochs,
         save(backbone, c_model, p_model, results_folder)
 
 
-def backbone_loop(outer_epoch, dataloader, writer, 
+def backbone_loop(outer_epoch, dataloader, writer, results_folder,
                 backbone, c_model, p_model, 
                 criterion, c_criterion, p_criterion,
                 optim=None, c_optim=None, p_optim=None,
                 scheduler=None, c_scheduler=None, p_scheduler=None, 
                 inner_epochs=1, device='cuda'):
-    
+
+    is_train = False if optim is None else True
+
     toggle_downstream(c_model, p_model, True)
-    downstream_loop(outer_epoch, inner_epochs, writer, dataloader,
+    downstream_loop(outer_epoch, inner_epochs, writer, 
+                    results_folder, dataloader,
                     backbone, c_model, p_model, 
                     c_criterion, p_criterion, 
                     c_optim, p_optim,
                     c_scheduler, p_scheduler)
     toggle_downstream(c_model, p_model, False)
     
-    backbone.eval() if optim is None else backbone.train()
+    backbone.train() if is_train else backbone.eval()
 
     loss_total = 0.
     per_class = np.array([0.,0.,0.])
@@ -66,30 +69,26 @@ def backbone_loop(outer_epoch, dataloader, writer,
     for n_iter, (x, labels) in enumerate(tqdm(dataloader)):
         x, labels = x.float().to(device), labels.float().to(device)
         
-        if optim is None:
-            with torch.no_grad():
-                features = backbone(x)
-
-                exp_prior_y1 = c_model(features)
-                exp_propensity = p_model(features)
-
-                loss = criterion(exp_prior_y1, exp_propensity, labels)
-                loss, loss_total, per_class = update_loss(loss, loss_total, per_class)
-
-        else:
+        with torch.set_grad_enabled(is_train):
             features = backbone(x)
 
             exp_prior_y1 = c_model(features)
             exp_propensity = p_model(features)
 
-            optim.zero_grad()
+            if is_train: optim.zero_grad()
             loss = criterion(exp_prior_y1, exp_propensity, labels)
             loss, loss_total, per_class = update_loss(loss, loss_total, per_class)
-            loss.backward()
-            optim.step()
+            if is_train:
+                loss.backward()
+                plot_grad_flow(backbone, name="backbone", dest=results_folder)
+                optim.step()
 
     ll = loss_total/len(dataloader)
-    if scheduler is not None: scheduler.step(ll)
+
+    if is_train: 
+        writer.add_scalar('lr', optim.param_groups[0]['lr'], outer_epoch)
+    else:
+        scheduler.step(ll)
     
     writer.add_scalar('log_likelihood', ll, outer_epoch)
     for l_i, l in enumerate(per_class):
@@ -98,14 +97,17 @@ def backbone_loop(outer_epoch, dataloader, writer,
     return ll
 
 
-def downstream_loop(outer_epoch, epochs, writer, dataloader, 
+def downstream_loop(outer_epoch, epochs, writer, 
+                    results_folder, dataloader, 
                     backbone, c_model, p_model, 
                     c_criterion, p_criterion, 
                     c_optim, p_optim,
                     c_scheduler, p_scheduler, device='cuda'):
                     
-    c_model.eval() if c_optim is None else c_model.train()
-    p_model.eval() if p_optim is None else p_model.train()
+    is_train = False if c_optim is None and p_optim is None else True
+
+    c_model.train() if is_train else c_model.eval()
+    p_model.train() if is_train else p_model.eval()
 
     c_criterion = c_criterion(reduction='none')
 
@@ -118,31 +120,18 @@ def downstream_loop(outer_epoch, epochs, writer, dataloader,
         for n_iter, (x, s) in enumerate(tqdm(dataloader)):
             x, s = x.float().to(device), s.float().to(device)
             
-            if c_optim is None:
-                with torch.no_grad():
-                    features = backbone(x).detach()
-
-                    exp_prior_y1 = c_model(features)
-                    exp_propensity = p_model(features)
-                    exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
-
-                    p_criterion2 = p_criterion(weight=exp_post_y1.detach(), reduction='none')
-                    p_loss = p_criterion2(exp_propensity, s)
-                    p_loss, p_loss_total, per_p_loss = update_loss(p_loss, p_loss_total, per_p_loss)
-
-                    c_loss = c_criterion(exp_prior_y1, exp_post_y1)
-                    c_loss, c_loss_total, per_c_loss = update_loss(c_loss, c_loss_total, per_c_loss)
-
-            else:
+            with torch.set_grad_enabled(is_train):
                 features = backbone(x).detach()
 
                 exp_prior_y1 = c_model(features)
                 exp_propensity = p_model(features)
                 exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
 
-                c_optim.zero_grad()
-                p_optim.zero_grad()
+                if is_train:
+                    c_optim.zero_grad()
+                    p_optim.zero_grad()
 
+                # always need to update weights
                 p_criterion2 = p_criterion(weight=exp_post_y1.detach(), reduction='none')
                 p_loss = p_criterion2(exp_propensity, s)
                 p_loss, p_loss_total, per_p_loss = update_loss(p_loss, p_loss_total, per_p_loss)
@@ -150,13 +139,20 @@ def downstream_loop(outer_epoch, epochs, writer, dataloader,
                 c_loss = c_criterion(exp_prior_y1, exp_post_y1)
                 c_loss, c_loss_total, per_c_loss = update_loss(c_loss, c_loss_total, per_c_loss)
 
-                p_loss.backward(retain_graph=True)
-                c_loss.backward()
-                p_optim.step()
-                c_optim.step()
-
-        if c_scheduler is not None: c_scheduler.step(c_loss_total/len(dataloader))
-        if p_scheduler is not None: p_scheduler.step(p_loss_total/len(dataloader))
+                if is_train:
+                    p_loss.backward(retain_graph=True)
+                    plot_grad_flow(p_model, name="propensity", dest=results_folder)
+                    c_loss.backward()
+                    plot_grad_flow(c_model, name="classifier", dest=results_folder)
+                    p_optim.step()
+                    c_optim.step()
+                
+        if is_train:
+            writer.add_scalar('lr_classifier', c_optim.param_groups[0]['lr'], outer_epoch*(epoch+1))
+            writer.add_scalar('lr_propensity', p_optim.param_groups[0]['lr'], outer_epoch*(epoch+1))
+        else:
+            c_scheduler.step(c_loss_total/len(dataloader))
+            p_scheduler.step(p_loss_total/len(dataloader))
 
         writer.add_scalar('loss_classifier', c_loss_total/len(dataloader), outer_epoch*(epoch+1))
         writer.add_scalar('loss_propensity', p_loss_total/len(dataloader), outer_epoch*(epoch+1))
