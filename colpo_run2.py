@@ -10,7 +10,7 @@ data_name = "colpo"
 
 
 
-models = ['singlefc']
+models = ['convfc-batch128-lr01-cycliclr-ccstep40-oldy1']
 for m in models:
     results_folder="/home/manalo/code/sar-pu-git/results/"+m+"/"
     for i in range(1):
@@ -18,14 +18,14 @@ for m in models:
             data_folder, 
             dataset_folder+str(i), 
             results_folder+str(i), 
-            model_name='resnetfeat-50', 
-            c_model_name='singlefc-2048', 
-            p_model_name='singlefc-2048', 
+            model_name='resnetfeat-49', 
+            c_model_name='convfc50-2048', 
+            p_model_name='convfc50-2048', 
             class_count=3, 
-            batch_size=64, 
+            batch_size=128, 
             pos_class=None, 
             device='cuda', 
             seed=11, 
-            device_num='0,1,2,3',
-            outer_epochs=50, 
+            device_num='1',
+            outer_epochs=100, 
             inner_epochs=1)

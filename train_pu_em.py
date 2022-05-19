@@ -22,12 +22,6 @@ from loss.pu_rank_loss import PURankLoss
 import math
 
 def expectation_y(expectation_f, expectation_e, s):
-   #print("EXPECTATION F")
-   #print(expectation_f)
-   #print("EXPECTATION E")
-   #print(expectation_e)
-   #print("LABELS")
-   #print(s)
     result= s + (1-s) * (expectation_f*(1-expectation_e))/(1-expectation_f*expectation_e)
     return result
 

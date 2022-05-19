@@ -71,7 +71,7 @@ class ColpoDataset(Dataset):
             for line in content:
                 items = line.split()
                 imagepath = items[0].strip()
-                imagelabel = items[1:]
+                imagelabel = items[1:class_count+1]
                 imagelabel = [int(i) for i in imagelabel]
                 #if class_count == 1:
                 #    imagelabel = 1 if 1 in [imagelabel[pos] for pos in pos_class] else 0
@@ -97,15 +97,15 @@ class ColpoDataset(Dataset):
         image_fn = join(self.image_path, self.listimgpaths[idx])
         image = Image.open(image_fn)
         image = self.augmenter(image, self.train)    
-        return image, torch.FloatTensor(self.listimglabels[idx])
+        return idx, image, torch.FloatTensor(self.listimglabels[idx])
 
     def augmenter(self, image, train=False):
         try:
             if train:
-                transform = transforms.Compose([transforms.RandomRotation(degrees=5),
+                transform = transforms.Compose([transforms.ColorJitter(brightness=.3, contrast=.5, saturation=.2, hue=.3),
+                                        transforms.RandomRotation(degrees=5),
                                         transforms.RandomVerticalFlip(p=0.5),
                                         transforms.RandomHorizontalFlip(p=0.5),
-                                        # transforms.ColorJitter(brightness=5, contrast=5, saturation=5, hue=5),
                                         transforms.Resize((288, 288))])
             else:
                 transform = transforms.Compose([transforms.Resize((288, 288))])

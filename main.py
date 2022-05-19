@@ -9,13 +9,14 @@ from setup_multirun import nondeterministic
 from model.model_factory import get_model
 from loss_factory import get_loss
 import os
-
+from colpo_c_only import train_c_only
 
 def main(data_folder, dataset_folder, results_folder, 
         model_name, c_model_name, p_model_name, 
         class_count=3, batch_size=64, pos_class=None, 
         device='cuda', seed=None, device_num="0",
-        outer_epochs=50, inner_epochs=1):
+        outer_epochs=50, inner_epochs=1, pretrain_weights=None,
+        c_only=False):
     """
         Train and evaluate using SAR-PU
         :param data_folder: folder with images
@@ -55,34 +56,62 @@ def main(data_folder, dataset_folder, results_folder,
     p_model = get_model(p_model_name[0], p_model_name[1], class_count)
     p_model = p_model.to(device)
 
-    if device == 'cuda' and torch.cuda.device_count() > 1 and len(device_num)>1:
+    if device == 'cuda':
         backbone = torch.nn.DataParallel(backbone)
         c_model = torch.nn.DataParallel(c_model)
         p_model = torch.nn.DataParallel(p_model)
 
-    # optimizer setup
-    optim = torch.optim.SGD(backbone.parameters(), lr=0.1)
-    c_optim = torch.optim.SGD(backbone.parameters(), lr=0.1)
-    p_optim = torch.optim.SGD(backbone.parameters(), lr=0.1)
+    if pretrain_weights is not None:
+         # vanilla has module, parallel
+        backbone.load_state_dict(torch.load(os.path.join(dataset_folder, pretrain_weights+".pt")), strict=False)
+        print("Loaded", pretrain_weights, "...")
 
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optim, mode='min', patience=3)
-    c_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(c_optim, mode='min', patience=3)
-    p_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(p_optim, mode='min', patience=3)
+    # optimizer setup
+    optim = torch.optim.SGD(backbone.parameters(), lr=0.01)
+    c_optim = torch.optim.SGD(c_model.parameters(), lr=0.01)
+    p_optim = torch.optim.SGD(p_model.parameters(), lr=0.01)
+    #optim = torch.optim.Adam(backbone.parameters(), lr=0.01)
+    #c_optim = torch.optim.Adam(c_model.parameters(), lr=0.01)
+    #p_optim = torch.optim.Adam(p_model.parameters(), lr=0.01)
+
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=52)
+    c_scheduler = torch.optim.lr_scheduler.CyclicLR(c_optim, base_lr=0.00001, max_lr=0.01, step_size_up=52)
+    p_scheduler = torch.optim.lr_scheduler.CyclicLR(p_optim, base_lr=0.00001, max_lr=0.01, step_size_up=52)
 
     # criterion setup
     criterion = get_loss("loglikelihood")
     c_criterion = get_loss("bcelogits")
-    p_criterion = get_loss("bcelogits")
+    p_criterion = get_loss("multimargin")
 
     # Tensorboard writers
     train_writer = SummaryWriter(log_dir=join(results_folder, 'train'))
     val_writer = SummaryWriter(log_dir=join(results_folder, 'val'))
 
-    train_val(results_folder, outer_epochs, inner_epochs,
-            train_loader, val_loader, 
+    if c_only:
+        bb_weights = os.path.join(results_folder, "BEST_bb.pt")
+        c_weights = os.path.join(results_folder, "BEST_c.pt")
+        p_weights = os.path.join(results_folder, "BEST_p.pt")
+
+        backbone.load_state_dict(torch.load(bb_weights),strict=True)
+        c_model.load_state_dict(torch.load(c_weights),strict=True)
+        p_model.load_state_dict(torch.load(p_weights),strict=True)
+
+        c_scheduler = torch.optim.lr_scheduler.CyclicLR(c_optim, base_lr=0.001, max_lr=0.1, step_size_up=52)
+
+
+        train_c_only(device, results_folder,
+            backbone, c_model, p_model,
+            train_loader, val_loader,
+            criterion, c_optim, c_scheduler,
             train_writer, val_writer, 
-            backbone, c_model, p_model, 
-            criterion, c_criterion, p_criterion,
-            optim, c_optim, p_optim,
-            scheduler, c_scheduler, p_scheduler)
+            epochs=int(outer_epochs/2))
+    else:
+
+        train_val(results_folder, outer_epochs, inner_epochs,
+                train_loader, val_loader, 
+                train_writer, val_writer, 
+                backbone, c_model, p_model, 
+                criterion, c_criterion, p_criterion,
+                optim, c_optim, p_optim,
+                scheduler, c_scheduler, p_scheduler)
 

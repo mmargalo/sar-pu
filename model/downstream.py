@@ -52,7 +52,7 @@ class ConvFc(torch.nn.Module):
         self.class_count = class_count
         self.feat_count = int(feat_count)
 
-        base = resnet50(pretrained=True)
+        base = resnet18(pretrained=True)
         self.conv = base.layer4
         self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
         self.fc = torch.nn.Linear(self.feat_count, class_count)
@@ -62,7 +62,24 @@ class ConvFc(torch.nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         return self.fc(x)
-        
+
+class ConvFc50(torch.nn.Module):
+    def __init__(self, feat_count, class_count=3):
+        super(ConvFc50, self).__init__()
+
+        self.class_count = class_count
+        self.feat_count = int(feat_count)
+
+        base = resnet50(pretrained=True)
+        self.conv = base.layer4
+        self.avgpool = torch.nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = torch.nn.Linear(self.feat_count, class_count)
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.avgpool(x)
+        x = torch.flatten(x, 1)
+        return self.fc(x)        
 
 
         

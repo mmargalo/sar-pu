@@ -6,6 +6,7 @@ from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet15
 
 model_dict = {
     '18': (resnet18, 512),
+    '19': (resnet18, 512),
     '34': (resnet34, 512),
     '49': (resnet50, 2048), 
     '50': (resnet50, 2048), 
@@ -37,7 +38,7 @@ class ResnetFeat(torch.nn.Module):
         self.layer1 = resnet.layer1
         self.layer2 = resnet.layer2
         self.layer3 = resnet.layer3
-        if self.type != '49': self.layer4 = resnet.layer4
+        if self.type not in ['49', '19']: self.layer4 = resnet.layer4
         #self.avgpool = resnet.avgpool
     
     def get_network(self, type):
@@ -54,7 +55,8 @@ class ResnetFeat(torch.nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
-        if self.type != '49': 
+        if self.type not in ['49', '19']: 
+            print("NOT IN")
             x = self.layer4(x)
         
         #x = self.avgpool(x)

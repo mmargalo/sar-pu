@@ -3,7 +3,7 @@ from .densenet import Densenet
 from .alexnet import Alexnet
 from .vggnet import Vggnet
 from .resnet_feat import ResnetFeat
-from .downstream import SimpleFc, SingleFc, ConvFc
+from .downstream import SimpleFc, SingleFc, ConvFc, ConvFc50
 
 model_dict = {
     'alexnet': Alexnet,
@@ -13,7 +13,8 @@ model_dict = {
     'resnetfeat': ResnetFeat,
     'singlefc': SingleFc,
     'simplefc': SimpleFc,
-    'convfc': ConvFc
+    'convfc': ConvFc,
+    'convfc50': ConvFc50
 }
 
 def get_model(base_model, type, class_count):
