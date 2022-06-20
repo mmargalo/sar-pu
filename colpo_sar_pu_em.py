@@ -132,6 +132,8 @@ def downstream_loop(outer_epoch, epochs, writer,
         per_c_loss = np.array([0.,0.,0.])
         per_p_loss = np.array([0.,0.,0.])
 
+        accum = len(dataloader) - 1
+
         for n_iter, (idx, x, s) in enumerate(tqdm(dataloader)):
             x, s = x.float().to(device), s.float().to(device)
             c_model.train() if is_train else c_model.eval()
@@ -154,21 +156,21 @@ def downstream_loop(outer_epoch, epochs, writer,
                     #p_criterion2 = p_criterion(weight=p_weights, reduction='none')
                     p_criterion2 = p_criterion()
                     c_criterion2 = c_criterion(weight=c_weights, reduction='none')
-                    if is_train:
-                        c_optim.zero_grad()
-                        p_optim.zero_grad()
+                    # if is_train:
+                    #     c_optim.zero_grad()
+                    #     p_optim.zero_grad()
                     p_loss = p_criterion2(exp_propensity, s, weights=p_weights)
                     c_loss = c_criterion2(exp_prior_y1, s)
 
                 else:
-                    exp_post_y1 = get_list(idx, y1_post_list).to(device)
-                    #exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
+                    #exp_post_y1 = get_list(idx, y1_post_list).to(device)
+                    exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
                     p_criterion2 = p_criterion()
                     #p_criterion2 = p_criterion(weight=exp_post_y1.detach(), reduction='none')
                     c_criterion2 = c_criterion(reduction='none')
-                    if is_train:
-                        c_optim.zero_grad()
-                        p_optim.zero_grad()
+                    # if is_train:
+                    #     c_optim.zero_grad()
+                    #     p_optim.zero_grad()
                     p_loss = p_criterion2(exp_propensity, s, weights=exp_post_y1.detach())
                     c_loss = c_criterion2(exp_prior_y1, exp_post_y1)
                 
@@ -180,27 +182,31 @@ def downstream_loop(outer_epoch, epochs, writer,
                     plot_grad_flow(p_model, name="propensity", dest=results_folder)
                     c_loss.backward()
                     plot_grad_flow(c_model, name="classifier", dest=results_folder)
-                    p_optim.step()
-                    c_optim.step()
+                    
+                    if n_iter == accum:
+                        p_optim.step()
+                        c_optim.step()
+                        c_optim.zero_grad()
+                        p_optim.zero_grad()
                 
                 
-                with torch.no_grad():
-                    c_model.eval()
-                    p_model.eval()
+                # with torch.no_grad():
+                #     c_model.eval()
+                #     p_model.eval()
         
-                    exp_prior_y1 = c_model(features)
-                    exp_propensity = p_model(features)
-                    exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s)
-                    exp_post_y1 = torch.nan_to_num(exp_post_y1, posinf=1.0)
-                    y1_post_list = set_list(idx, exp_post_y1, y1_post_list)
+                #     exp_prior_y1 = c_model(features)
+                #     exp_propensity = p_model(features)
+                #     exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s)
+                #     exp_post_y1 = torch.nan_to_num(exp_post_y1, posinf=1.0)
+                #     y1_post_list = set_list(idx, exp_post_y1, y1_post_list)
 
                 if is_train:
                     # cyclic lr
                     writer.add_scalar('lr_classifier', c_optim.param_groups[0]['lr'], outer_epoch* len(dataloader) + n_iter)
                     writer.add_scalar('lr_propensity', p_optim.param_groups[0]['lr'], outer_epoch* len(dataloader) + n_iter)
-
-                    c_scheduler.step()
-                    p_scheduler.step()
+                    if n_iter == accum:
+                        c_scheduler.step()
+                        p_scheduler.step()
                      
         #if is_train:
         #    writer.add_scalar('lr_classifier', c_optim.param_groups[0]['lr'], outer_epoch*(epoch+1))
