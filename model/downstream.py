@@ -79,8 +79,8 @@ class ConvFc50(torch.nn.Module):
         x = self.conv(x)
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-        return self.fc(x)        
-
+        return self.fc(x)      
+    
 
         
 

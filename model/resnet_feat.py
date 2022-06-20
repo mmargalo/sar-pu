@@ -38,7 +38,10 @@ class ResnetFeat(torch.nn.Module):
         self.layer1 = resnet.layer1
         self.layer2 = resnet.layer2
         self.layer3 = resnet.layer3
-        if self.type not in ['49', '19']: self.layer4 = resnet.layer4
+        self.layer4 = resnet.layer4
+        if self.type in ['49', '19']: self.layer4 = nn.Sequential() 
+        
+        #self.layer4 = resnet.layer4
         #self.avgpool = resnet.avgpool
     
     def get_network(self, type):
@@ -56,12 +59,12 @@ class ResnetFeat(torch.nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         if self.type not in ['49', '19']: 
-            print("NOT IN")
             x = self.layer4(x)
         
         #x = self.avgpool(x)
             
         return x
+        
         
 
     
