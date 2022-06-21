@@ -69,7 +69,7 @@ class ColpoDataset(Dataset):
         with open(dataset_path, "r") as reader:
             content = reader.readlines()
             for line in content:
-                items = line.split()
+                items = line.split("\t")
                 imagepath = items[0].strip()
                 imagelabel = items[1:class_count+1]
                 imagelabel = [int(i) for i in imagelabel]

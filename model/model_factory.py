@@ -4,7 +4,7 @@ from .alexnet import Alexnet
 from .vggnet import Vggnet
 from .resnet_feat import ResnetFeat
 from .downstream import SimpleFc, SingleFc, ConvFc, ConvFc50
-from csra import ResnetCSRA
+from .csra import ResnetCSRA
 
 model_dict = {
     'alexnet': Alexnet,
@@ -19,10 +19,10 @@ model_dict = {
     'csraresnet': ResnetCSRA
 }
 
-def get_model(base_model, type, class_count, **kwargs):
+def get_model(base_model, type, class_count):
     base_model = base_model.lower()
     type = type.lower()
 
     assert base_model in model_dict.keys()
     model = model_dict[base_model]
-    return model(type, class_count, kwargs)
+    return model(type, class_count)

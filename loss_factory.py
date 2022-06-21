@@ -6,7 +6,7 @@ class MultiMarginRank(torch.nn.Module):
         self.criterion = torch.nn.MarginRankingLoss(reduction='none')
         self.sigmoid = torch.nn.Sigmoid()
 
-    def forward(self, pred, labels, weights=None):
+    def forward(self, pred, labels, weight=None):
         loss = torch.zeros_like(labels)
         for i in range(labels.shape[1]):
             s1 = labels[:,i]
@@ -16,8 +16,8 @@ class MultiMarginRank(torch.nn.Module):
                 y2 = self.sigmoid(pred[:,j])
                 loss[:, i] += self.criterion(y1, y2, s1-s2)
             loss[:,i] /= labels.shape[1]
-            if weights is not None:
-                loss[:,i] *= weights[:,i]
+            if weight is not None:
+                loss[:,i] *= weight[:,i]
         return loss
 
 class Loglikelihood(torch.nn.Module):

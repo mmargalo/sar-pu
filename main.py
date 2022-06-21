@@ -74,14 +74,14 @@ def main(data_folder, dataset_folder, results_folder,
     #c_optim = torch.optim.Adam(c_model.parameters(), lr=0.01)
     #p_optim = torch.optim.Adam(p_model.parameters(), lr=0.01)
 
-    scheduler = torch.optim.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=52)
-    c_scheduler = torch.optim.lr_scheduler.CyclicLR(c_optim, base_lr=0.00001, max_lr=0.01, step_size_up=52)
-    p_scheduler = torch.optim.lr_scheduler.CyclicLR(p_optim, base_lr=0.00001, max_lr=0.01, step_size_up=52)
+    scheduler = torch.optim.lr_scheduler.CyclicLR(optim, base_lr=0.0001, max_lr=0.01, step_size_up=40)
+    c_scheduler = torch.optim.lr_scheduler.CyclicLR(c_optim, base_lr=0.00001, max_lr=0.01, step_size_up=40)
+    p_scheduler = torch.optim.lr_scheduler.CyclicLR(p_optim, base_lr=0.00001, max_lr=0.01, step_size_up=40)
 
     # criterion setup
     criterion = get_loss("loglikelihood")
     c_criterion = get_loss("bcelogits")
-    p_criterion = get_loss("multimargin")
+    p_criterion = get_loss("bcelogits")
 
     # Tensorboard writers
     train_writer = SummaryWriter(log_dir=join(results_folder, 'train'))

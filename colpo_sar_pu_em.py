@@ -83,7 +83,7 @@ def backbone_loop(outer_epoch, dataloader, writer, results_folder,
             loss, loss_total, per_class = update_loss(loss, loss_total, per_class)
             if is_train:
                 loss.backward()
-                plot_grad_flow(backbone, name="backbone", dest=results_folder)
+                #plot_grad_flow(backbone, name="backbone", dest=results_folder)
                 optim.step()
 
         # cycliclr
@@ -153,25 +153,27 @@ def downstream_loop(outer_epoch, epochs, writer,
                     c_exp = torch.nn.Sigmoid()(exp_prior_y1).view_as(s).detach()
                     p_weights = s + (1 - s) * c_exp
                     c_weights = s * (1 - proportion_labeled) + (1 - s) * proportion_labeled
-                    #p_criterion2 = p_criterion(weight=p_weights, reduction='none')
-                    p_criterion2 = p_criterion()
+                    p_criterion2 = p_criterion(weight=p_weights, reduction='none')
+                    #p_criterion2 = p_criterion()
                     c_criterion2 = c_criterion(weight=c_weights, reduction='none')
                     # if is_train:
                     #     c_optim.zero_grad()
                     #     p_optim.zero_grad()
-                    p_loss = p_criterion2(exp_propensity, s, weights=p_weights)
+                    # p_loss = p_criterion2(exp_propensity, s, weight=p_weights)
+                    p_loss = p_criterion2(exp_propensity, s)
                     c_loss = c_criterion2(exp_prior_y1, s)
 
                 else:
-                    #exp_post_y1 = get_list(idx, y1_post_list).to(device)
-                    exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
-                    p_criterion2 = p_criterion()
-                    #p_criterion2 = p_criterion(weight=exp_post_y1.detach(), reduction='none')
+                    exp_post_y1 = get_list(idx, y1_post_list).to(device)
+                    #exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s) 
+                    #p_criterion2 = p_criterion()
+                    p_criterion2 = p_criterion(weight=exp_post_y1.detach(), reduction='none')
                     c_criterion2 = c_criterion(reduction='none')
                     # if is_train:
                     #     c_optim.zero_grad()
                     #     p_optim.zero_grad()
-                    p_loss = p_criterion2(exp_propensity, s, weights=exp_post_y1.detach())
+                    # p_loss = p_criterion2(exp_propensity, s, weight=exp_post_y1.detach())
+                    p_loss = p_criterion2(exp_propensity, s)
                     c_loss = c_criterion2(exp_prior_y1, exp_post_y1)
                 
                 p_loss, p_loss_total, per_p_loss = update_loss(p_loss, p_loss_total, per_p_loss)
@@ -179,34 +181,43 @@ def downstream_loop(outer_epoch, epochs, writer,
 
                 if is_train:
                     p_loss.backward(retain_graph=True)
-                    plot_grad_flow(p_model, name="propensity", dest=results_folder)
+                    #plot_grad_flow(p_model, name="propensity", dest=results_folder)
                     c_loss.backward()
-                    plot_grad_flow(c_model, name="classifier", dest=results_folder)
+                    #plot_grad_flow(c_model, name="classifier", dest=results_folder)
+                    p_optim.step()
+                    c_optim.step()
+                    c_optim.zero_grad()
+                    p_optim.zero_grad()
                     
-                    if n_iter == accum:
-                        p_optim.step()
-                        c_optim.step()
-                        c_optim.zero_grad()
-                        p_optim.zero_grad()
+                    # if n_iter == accum:
+                    #     print("STEP1")
+                    #     p_optim.step()
+                    #     c_optim.step()
+                    #     c_optim.zero_grad()
+                    #     p_optim.zero_grad()
                 
                 
-                # with torch.no_grad():
-                #     c_model.eval()
-                #     p_model.eval()
+                with torch.no_grad():
+                    c_model.eval()
+                    p_model.eval()
         
-                #     exp_prior_y1 = c_model(features)
-                #     exp_propensity = p_model(features)
-                #     exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s)
-                #     exp_post_y1 = torch.nan_to_num(exp_post_y1, posinf=1.0)
-                #     y1_post_list = set_list(idx, exp_post_y1, y1_post_list)
+                    exp_prior_y1 = c_model(features)
+                    exp_propensity = p_model(features)
+                    exp_post_y1 = expectation_y(exp_prior_y1, exp_propensity, s)
+                    exp_post_y1 = torch.nan_to_num(exp_post_y1, posinf=1.0)
+                    y1_post_list = set_list(idx, exp_post_y1, y1_post_list)
 
                 if is_train:
                     # cyclic lr
                     writer.add_scalar('lr_classifier', c_optim.param_groups[0]['lr'], outer_epoch* len(dataloader) + n_iter)
                     writer.add_scalar('lr_propensity', p_optim.param_groups[0]['lr'], outer_epoch* len(dataloader) + n_iter)
-                    if n_iter == accum:
-                        c_scheduler.step()
-                        p_scheduler.step()
+                    c_scheduler.step()
+                    p_scheduler.step()
+                    
+                    # if n_iter == accum:
+                    #     print("STEP2")
+                    #     c_scheduler.step()
+                    #     p_scheduler.step()
                      
         #if is_train:
         #    writer.add_scalar('lr_classifier', c_optim.param_groups[0]['lr'], outer_epoch*(epoch+1))

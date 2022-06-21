@@ -4,7 +4,6 @@ from torchvision.models import resnet18, resnet34, resnet50, resnet101, resnet15
     resnext50_32x4d, resnext101_32x8d, wide_resnet50_2, wide_resnet101_2
 from torchvision.models import ResNet
 from torchvision.models.resnet import Bottleneck, BasicBlock
-from .csra import CSRA, MHA
 import torch.utils.model_zoo as model_zoo
 import logging
 import torch
@@ -78,13 +77,13 @@ class ResnetCSRA(ResNet):
         152: (Bottleneck, (3, 8, 36, 3))
     }
 
-    def __init__(self, type, num_classes, classifier=None, num_heads=1,lam=0.2, input_dim=2048, cutmix=None):
-        self.block, self.layers = self.arch_settings[type]
+    def __init__(self, type, num_classes, classifier=None, num_heads=4,lam=0.2, input_dim=2048, cutmix=None):
+        self.block, self.layers = self.arch_settings[int(type)]
         self.depth = type
         super(ResnetCSRA, self).__init__(self.block, self.layers)
         self.init_weights(pretrained=True, cutmix=cutmix)
 
-        self.classifier = MHA(num_heads, lam, input_dim, num_classes) if classifier is not None else classifier
+        self.classifier = MHA(num_heads, lam, input_dim, num_classes) #if classifier is not None else classifier
         self.loss_func = F.binary_cross_entropy_with_logits
 
     def backbone(self, x):
